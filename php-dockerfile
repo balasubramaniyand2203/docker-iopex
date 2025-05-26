@@ -1,0 +1,68 @@
+FROM php:8.3-apache
+
+# Enable Apache modules
+RUN a2enmod rewrite
+
+# Install system dependencies
+RUN apt-get update && apt-get install -y \
+    vim \
+    git \
+    unzip \
+    libpq-dev \
+    libonig-dev \
+    libzip-dev \
+    libgd-dev \
+    libjpeg-dev \
+    libpng-dev \
+    libfreetype6-dev \
+    && apt-get clean \
+    && rm -rf /var/lib/apt/lists/*
+
+# Install PHP extensions
+RUN docker-php-ext-configure gd --with-freetype --with-jpeg --with-webp \
+    && docker-php-ext-install -j$(nproc) \
+    pdo \
+    pdo_mysql \
+    mbstring \
+    zip \
+    exif \
+    opcache \
+    pcntl \
+    gd
+
+# Set working directory
+WORKDIR /var/www/html
+
+# Install Composer dynamically instead of COPY
+RUN curl -sS https://getcomposer.org/installer | php -- --install-dir=/usr/bin --filename=composer
+
+# Copy application files
+COPY . .
+
+# Ensure custom Apache configuration file exists
+RUN touch /etc/apache2/conf-enabled/custom.conf \
+    && echo "php_value upload_max_filesize 12M" >> /etc/apache2/conf-enabled/custom.conf \
+    && echo "php_value post_max_size 12M" >> /etc/apache2/conf-enabled/custom.conf \
+    && echo "php_value max_execution_time 300" >> /etc/apache2/conf-enabled/custom.conf \
+    && echo "php_value max_input_time 300" >> /etc/apache2/conf-enabled/custom.conf \
+    && echo "php_value default_socket_timeout 300" >> /etc/apache2/conf-enabled/custom.conf
+
+# Fix Git ownership issue and set permissions
+RUN git config --global --add safe.directory /var/www/html \
+    && chown -R www-data:www-data /var/www/html \
+    && chmod -R 755 /var/www/html
+
+# Configure Apache
+COPY docker/apache.conf /etc/apache2/sites-available/000-default.conf
+
+# Set Composer timeout and install dependencies
+#RUN composer config --global process-timeout 600 \
+ #   && composer install --prefer-dist --no-dev --no-interaction --no-progress
+RUN composer config --global process-timeout 600
+RUN composer install --no-interaction
+
+# Expose port 80
+EXPOSE 80
+
+# Start Apache
+CMD ["apache2-foreground"]
