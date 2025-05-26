@@ -1,0 +1,72 @@
+# Use PHP 8.2 with Apache
+FROM php:8.2-apache
+
+# Set working directory
+WORKDIR /var/www/html/wsu
+
+# Update package lists and install dependencies for PHP extensions
+RUN apt-get update && apt-get install -y \
+    libzip-dev \
+    libpng-dev \
+    libjpeg-dev \
+    libfreetype6-dev \
+    libicu-dev \
+    libbz2-dev \
+    libonig-dev \
+    libxml2-dev \
+    libsqlite3-dev \
+    pkg-config \
+    && rm -rf /var/lib/apt/lists/*
+
+# Configure GD extension
+RUN docker-php-ext-configure gd --with-freetype --with-jpeg
+
+# Install PHP extensions individually for better debugging
+RUN docker-php-ext-install \
+    mysqli \
+    pdo \
+    pdo_mysql \
+    bz2 \
+    fileinfo \
+    gd \
+    gettext \
+    intl \
+    mbstring \
+    exif \
+    pdo_sqlite \
+    zip
+
+# Enable Apache mod_rewrite
+#RUN a2enmod rewrite
+
+# Copy Apache configuration
+COPY ./apache.conf /etc/apache2/sites-available/000-default.conf
+
+# Copy application source code
+COPY . .
+
+#RUN cp /var/www/html/wsu/app/Config/Constants.php.dist /var/www/html/wsu/app/Config/Constants.php
+# Ensure writable directory exists
+# Create writable directories
+RUN mkdir -p /var/www/html/wsu/writable \
+    /var/www/html/wsu/writable/cache \
+    /var/www/html/wsu/writable/debugbar \
+    /var/www/html/wsu/writable/logs \
+    /var/www/html/wsu/writable/session \
+    /var/www/html/wsu/writable/uploads
+
+# Set proper permissions
+RUN chown -R www-data:www-data /var/www/html \
+    && chmod -R 755 /var/www/html \
+    && chmod -R 777 /var/www/html/wsu/writable
+
+
+
+RUN a2enmod rewrite
+
+
+# Expose port 80
+EXPOSE 80
+
+# Start Apache
+CMD ["apache2-foreground"]
